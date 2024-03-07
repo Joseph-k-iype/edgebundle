@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg">
+  <title>newappcactus</title>
+  </head>
+  <body>
+    <div id="app">
+      <div class="header">
+        <div class="title">newappcactus</div>
+        <div class="toolbar">
+          <label>
+            Bundling Strength:
+            <input
+              type="range"
+              min="0"
+              max="1"
+              value="0.1"
+              step="0.01"
+              id="bundling-strength-slider"
+            />
+            <span id="bundling-strength-label">0.98</span>
+          </label>
+          <button id="btn-increase-zoom" title="Increase Zoom" class="demo-icon-yIconZoomIn"></button>
+          <button id="btn-decrease-zoom" title="Decrease Zoom" class="demo-icon-yIconZoomOut"></button>
+          <button id="btn-fit-graph" title="Fit Graph Bounds" class="demo-icon-yIconZoomFit"></button>
+          <span class="separator"></span>
+          <button id="btn-export-svg" title="Export as SVG">SVG</button>
+          <button id="btn-export-png" title="Export as PNG">PNG</button>
+          <button id="btn-export-pdf" title="Export as PDF">PDF</button>
+          <span class="separator"></span>
+          <button id="btn-print" title="Print diagram" class="demo-icon-yIconPrint"></button>
+          <span class="spacer"></span>
+          <input id="graph-search-input" class="graph-search" placeholder="Search Nodes" />
+        </div>
+      </div>
+      <div class="main">
+        <div class="graph-component-container"></div>
+      </div>
+      <div style="position: absolute; bottom: 20px; right: 15px;">
+        <a href="https://yworks.com" target="_blank" style="margin: 10px;">
+          <img src="/src/assets/yWorksLogo.png" alt="yWorks Logo" style="height: 50px; width: 50px;">
+        </a>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
