@@ -29,7 +29,9 @@ import {
   InteriorLabelModel,
   EdgeBundleDescriptor,
   EdgeBundlingStage,
-  EdgeBundlingStageData
+  EdgeBundlingStageData,
+  INode,
+  GraphItemTypes
 } from 'yfiles'
 import { enableFolding } from './lib/FoldingSupport'
 import loadGraph from './lib/loadGraph'
@@ -49,6 +51,7 @@ async function run() {
   initializeTooltips(graphComponent)
   initializeContextMenu(graphComponent)
   initializeGraphSearch(graphComponent)
+  updateLegend() // Update the legend with the domain colors
 }
 
 const csvData = [
@@ -57,8 +60,6 @@ const csvData = [
   { domain: 'Domain1', sourceSystem: 'SystemA', table: 'Table2' },
   { domain: 'Domain2', sourceSystem: 'SystemB', table: 'Table3' },
   { domain: 'Domain2', sourceSystem: 'SystemB', table: 'Table1' },
-
-  // Additional data to simulate a more complex structure
   { domain: 'Domain3', sourceSystem: 'SystemC', table: 'Table4' },
   { domain: 'Domain3', sourceSystem: 'SystemC', table: 'Table5' },
   { domain: 'Domain4', sourceSystem: 'SystemD', table: 'Table6' },
@@ -75,6 +76,33 @@ const csvData = [
   // This pattern can be extended further as needed
 ]
 
+function updateLegend() {
+  const legendItemsContainer = document.getElementById('legend-items')
+  legendItemsContainer.innerHTML = '' // Clear existing items
+
+  Object.keys(domainColors).forEach((domain) => {
+    const color = domainColors[domain]
+    const item = document.createElement('div')
+    item.style.display = 'flex'
+    item.style.alignItems = 'center'
+    item.style.marginBottom = '5px'
+
+    const colorSwatch = document.createElement('div')
+    colorSwatch.style.width = '20px'
+    colorSwatch.style.height = '20px'
+    colorSwatch.style.backgroundColor = color
+    colorSwatch.style.marginRight = '10px'
+
+    const domainLabel = document.createElement('span')
+    domainLabel.textContent = domain
+
+    item.appendChild(colorSwatch)
+    item.appendChild(domainLabel)
+
+    legendItemsContainer.appendChild(item)
+  })
+}
+
 function configureFolding(graphComponent) {
   // Initialize the FoldingManager with the graph of the GraphComponent
   const manager = new FoldingManager(graphComponent.graph)
@@ -87,52 +115,114 @@ function configureFolding(graphComponent) {
 }
 
 async function initializeGraphComponent(): Promise<GraphComponent> {
-  const graphComponent = new GraphComponent('.graph-component-container')
-  graphComponent.horizontalScrollBarPolicy = ScrollBarVisibility.AS_NEEDED_DYNAMIC
-  graphComponent.verticalScrollBarPolicy = ScrollBarVisibility.AS_NEEDED_DYNAMIC
+  const graphComponent = new GraphComponent('.graph-component-container');
+  graphComponent.horizontalScrollBarPolicy = ScrollBarVisibility.AS_NEEDED_DYNAMIC;
+  graphComponent.verticalScrollBarPolicy = ScrollBarVisibility.AS_NEEDED_DYNAMIC;
 
-  const mode = new GraphViewerInputMode()
-  mode.navigationInputMode.allowCollapseGroup = true
-  mode.navigationInputMode.allowEnterGroup = true
-  mode.navigationInputMode.allowExitGroup = true
-  mode.navigationInputMode.allowExpandGroup = true
+  const mode = new GraphViewerInputMode();
+  mode.navigationInputMode.allowCollapseGroup = true;
+  mode.navigationInputMode.allowEnterGroup = true;
+  mode.navigationInputMode.allowExitGroup = true;
+  mode.navigationInputMode.allowExpandGroup = true;
 
-  graphComponent.inputMode = mode
+  // Enable hover input mode for node highlighting
+  mode.itemHoverInputMode.enabled = true;
+  mode.itemHoverInputMode.hoverItems = GraphItemTypes.NODE;
+  mode.itemHoverInputMode.discardInvalidItems = false;
+  mode.itemHoverInputMode.addHoveredItemChangedListener((sender, args) => {
+    // Correctly pass `graphComponent` along with the hovered item
+    highlightConnectedPaths(graphComponent, args.item);
+  });
+  
 
-  // Correctly configure folding
-  configureFolding(graphComponent)
+  graphComponent.inputMode = mode;
 
-  return graphComponent
+  // Setup highlight styles for graph component
+  setupHighlightStyles(graphComponent);
+
+  configureFolding(graphComponent);
+
+  return graphComponent;
+}
+
+
+function setupHighlightStyles(graphComponent) {
+  const highlightColor = 'rgba(255, 215, 0, 0.7)'; // A gold-like color for highlights
+  const highlightEdgeStyle = new PolylineEdgeStyle({
+    stroke: `3px solid ${highlightColor}`,
+    targetArrow: new Arrow({
+      fill: highlightColor,
+      stroke: highlightColor,
+      type: 'triangle'
+    })
+  });
+
+  // Set highlight styles for edges
+  graphComponent.highlightIndicatorManager.edgeHighlightStyle = highlightEdgeStyle;
+}
+
+
+function highlightConnectedPaths(graphComponent, item) {
+  const highlightManager = graphComponent.highlightIndicatorManager;
+
+  // Clear existing highlights
+  highlightManager.clearHighlights();
+
+  if (item && item instanceof INode) {
+    // Highlight all connected edges
+    graphComponent.graph.edgesAt(item).forEach(edge => {
+      highlightManager.addHighlight(edge);
+    });
+  }
+}
+
+
+const domainColors = {
+  Domain1: '#FFD700', // Gold
+  Domain2: '#FF8C00', // DarkOrange
+  Domain3: '#1E90FF', // DodgerBlue
+  Domain4: '#32CD32', // LimeGreen
+  Domain5: '#6A5ACD' // SlateBlue
+  // Add more colors for additional domains as needed
 }
 
 async function buildGraphFromCsvData(graphComponent, csvData) {
-  const graph = graphComponent.graph;
-  graph.clear();
+  const graph = graphComponent.graph
+  graph.clear()
 
   // Define styles and label models as before
   const edgeStyle = new PolylineEdgeStyle({
     stroke: '2px solid black',
     targetArrow: new Arrow({ type: 'triangle', fill: 'black' })
-  });
-  const labelModel = new InteriorLabelModel().createParameter(InteriorLabelModelPosition.CENTER);
+  })
+  const labelModel = new InteriorLabelModel().createParameter(InteriorLabelModelPosition.CENTER)
 
-  const domainNodes = {};
-  const sourceSystems = {};
-  const tables = {};
+  const domainNodes = {}
+  const sourceSystems = {}
+  const tables = {}
 
   // Node and edge creation logic as before
   csvData.forEach(({ domain, sourceSystem, table }) => {
     if (!domainNodes[domain]) {
-      const domainNode = graph.createGroupNode(null, new Rect(0, 0, 300, 300), new ShapeNodeStyle({ fill: 'lightblue', shape: ShapeNodeShape.ELLIPSE }));
-      domainNodes[domain] = domainNode;
-      graph.addLabel(domainNode, domain, labelModel);
+      const color = domainColors[domain] || 'lightblue' // Default color if domain not found
+      const domainNode = graph.createGroupNode(
+        null,
+        new Rect(0, 0, 300, 300),
+        new ShapeNodeStyle({ fill: color, shape: ShapeNodeShape.ELLIPSE })
+      )
+      domainNodes[domain] = domainNode
+      graph.addLabel(domainNode, domain, labelModel)
     }
 
-    const systemKey = `${domain}-${sourceSystem}`;
+    const systemKey = `${domain}-${sourceSystem}`
     if (!sourceSystems[systemKey]) {
-      const systemNode = graph.createNode(domainNodes[domain], new Rect(0, 0, 150, 150), new ShapeNodeStyle({ fill: '#80ed99', shape: ShapeNodeShape.ELLIPSE }));
-      sourceSystems[systemKey] = systemNode;
-      graph.addLabel(systemNode, sourceSystem, labelModel);
+      const systemNode = graph.createNode(
+        domainNodes[domain],
+        new Rect(0, 0, 150, 150),
+        new ShapeNodeStyle({ fill: '#80ed99', shape: ShapeNodeShape.ELLIPSE })
+      )
+      sourceSystems[systemKey] = systemNode
+      graph.addLabel(systemNode, sourceSystem, labelModel)
     }
 
     // if (!tables[table]) {
@@ -142,69 +232,73 @@ async function buildGraphFromCsvData(graphComponent, csvData) {
     // }
 
     if (!tables[table]) {
-      const tableNode = graph.createNode(domainNodes[domain], new Rect(0, 0, 100, 100), new ShapeNodeStyle({ fill: '#f4a259', shape: ShapeNodeShape.ELLIPSE }));
-      tables[table] = tableNode;
-      graph.addLabel(tableNode, table, labelModel);
-      
+      const tableNode = graph.createNode(
+        domainNodes[domain],
+        new Rect(0, 0, 100, 100),
+        new ShapeNodeStyle({ fill: '#f4a259', shape: ShapeNodeShape.ELLIPSE })
+      )
+      tables[table] = tableNode
+      graph.addLabel(tableNode, table, labelModel)
+
       // Tag the node to identify it as a table node
-      tableNode.tag = { type: 'table' }; // Add this line
+      tableNode.tag = { type: 'table' } // Add this line
     }
 
-    const edge = graph.createEdge(sourceSystems[systemKey], tables[table]);
-    graph.setStyle(edge, edgeStyle);
-  });
+    const edge = graph.createEdge(sourceSystems[systemKey], tables[table])
+    graph.setStyle(edge, edgeStyle)
+  })
 
   // Adjust node colors based on the inbound edges after nodes and edges have been created
-  adjustNodeColorsBasedOnInboundEdges(graph);
+  adjustNodeColorsBasedOnInboundEdges(graph)
 
   // Apply the layout after all nodes and edges are added
-  await applyCactusGroupLayout(graphComponent);
+  await applyCactusGroupLayout(graphComponent)
 }
 
 // This function should be called right after the graph is completely built and just before applying the layout
 function adjustNodeColorsBasedOnInboundEdges(graph) {
   // Firstly, ensure that table nodes can be distinctly identified. For this example, let's assume
   // table nodes have their `fill` property set to '#f4a259' initially and we only adjust these nodes.
-  const tableNodeColor = '#f4a259';
-  const nodesToUpdate = [];
+  const tableNodeColor = '#f4a259'
+  const nodesToUpdate = []
 
-  graph.nodes.forEach(node => {
+  graph.nodes.forEach((node) => {
     // Assuming node tags or another mechanism is used to specifically identify table nodes
     // Adjust this logic based on your specific method to identify table nodes
-    if (node.tag && node.tag.type === 'table') { // Example condition, adjust as necessary
-      const inboundEdges = graph.inEdgesAt(node).size;
+    if (node.tag && node.tag.type === 'table') {
+      // Example condition, adjust as necessary
+      const inboundEdges = graph.inEdgesAt(node).size
       if (inboundEdges > 1) {
-        nodesToUpdate.push(node);
+        nodesToUpdate.push(node)
       }
     }
-  });
+  })
 
   // Now, darken the color of nodes with more than one inbound edge
-  nodesToUpdate.forEach(node => {
-    let nodeStyle = node.style;
+  nodesToUpdate.forEach((node) => {
+    let nodeStyle = node.style
     if (nodeStyle.fill === tableNodeColor) {
-      let darkerColor = darkenColor(nodeStyle.fill, graph.inEdgesAt(node).size - 1);
-      graph.setStyle(node, new ShapeNodeStyle({...nodeStyle, fill: darkerColor}));
+      let darkerColor = darkenColor(nodeStyle.fill, graph.inEdgesAt(node).size - 1)
+      graph.setStyle(node, new ShapeNodeStyle({ ...nodeStyle, fill: darkerColor }))
     }
-  });
-  console.log(nodesToUpdate);
+  })
+  console.log(nodesToUpdate)
 }
 
 function darkenColor(hex, count) {
   // Darkens the hex color based on the count. The actual implementation of this function
   // depends on how much you want to darken the color. This is a basic implementation.
-  let r = parseInt(hex.substr(1, 2), 16);
-  let g = parseInt(hex.substr(3, 5), 16);
-  let b = parseInt(hex.substr(5, 7), 16);
+  let r = parseInt(hex.substr(1, 2), 16)
+  let g = parseInt(hex.substr(3, 5), 16)
+  let b = parseInt(hex.substr(5, 7), 16)
 
   // Darken the color based on the number of inbound edges
-  r = Math.max(0, r - count * 10);
-  g = Math.max(0, g - count * 10);
-  b = Math.max(0, b - count * 10);
+  r = Math.max(0, r - count * 10)
+  g = Math.max(0, g - count * 10)
+  b = Math.max(0, b - count * 10)
 
-  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)
 }
-
 
 async function applyCactusGroupLayout(graphComponent) {
   // Directly define the base layout here to avoid the reference error
@@ -212,7 +306,7 @@ async function applyCactusGroupLayout(graphComponent) {
     nodeLabelingPolicy: NodeLabelingPolicy.HORIZONTAL,
     nodeLabelSpacing: 10,
     considerNodeLabels: true
-  });
+  })
 
   // Initialize the edge bundling stage with the corrected base layout definition
   // const edgeBundling = new EdgeBundlingStage(baseLayout);
@@ -233,12 +327,8 @@ async function applyCactusGroupLayout(graphComponent) {
   //   console.error('Error applying layout with edge bundling:', error);
   // }
 
-  await graphComponent.morphLayout(
-    baseLayout,
-    '1000ms'
-  )
+  await graphComponent.morphLayout(baseLayout, '1000ms')
 }
-
 
 function initializeToolbar(graphComponent: GraphComponent) {
   document.getElementById('btn-increase-zoom')!.addEventListener('click', () => {
