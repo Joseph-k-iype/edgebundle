@@ -1,0 +1,51 @@
+async function buildGraphFromCsvData(graphComponent, csvData) {
+  const graph = graphComponent.graph;
+  graph.clear();
+
+  const edgeStyle = new PolylineEdgeStyle({
+    stroke: '2px solid black',
+    targetArrow: new Arrow({ type: 'triangle', fill: 'black' })
+  });
+  const labelModel = new InteriorLabelModel().createParameter(InteriorLabelModelPosition.CENTER);
+
+  const domainNodes = {};
+  const objects = {}; // Stores both source systems and tables
+
+  // Process CSV data to create nodes and edges based on the new structure
+  csvData.forEach(row => {
+    const { fromObject, fromObjectDomain, fromObjectType, toObject, toObjectDomain, toObjectType } = row;
+
+    // Ensure domain nodes are created
+    [fromObjectDomain, toObjectDomain].forEach(domain => {
+      if (domain && !domainNodes[domain]) {
+        const color = domainColors[domain] || 'lightgray'; // Use a default color if the domain is not predefined
+        const domainNode = graph.createGroupNode(null, new Rect(), new ShapeNodeStyle({ fill: color, shape: ShapeNodeShape.RECTANGLE }));
+        domainNodes[domain] = domainNode;
+        graph.addLabel(domainNode, domain, labelModel);
+      }
+    });
+
+    // Function to ensure an object node is created
+    function ensureObjectNode(objectName, objectDomain, objectType) {
+      const key = `${objectDomain}-${objectName}`;
+      if (!objects[key]) {
+        const shape = objectType === 'table' ? ShapeNodeShape.ELLIPSE : ShapeNodeShape.RECTANGLE;
+        const fill = objectType === 'table' ? '#f4a259' : '#80ed99';
+        const objectNode = graph.createNode(domainNodes[objectDomain], new Rect(), new ShapeNodeStyle({ fill, shape }));
+        objects[key] = objectNode;
+        graph.addLabel(objectNode, objectName, labelModel);
+      }
+    }
+
+    ensureObjectNode(fromObject, fromObjectDomain, fromObjectType);
+    ensureObjectNode(toObject, toObjectDomain, toObjectType);
+
+    // Create an edge if both objects are within the same domain or if inter-domain connections are allowed
+    if (fromObjectDomain === toObjectDomain) {
+      graph.createEdge(objects[`${fromObjectDomain}-${fromObject}`], objects[`${toObjectDomain}-${toObject}`], edgeStyle);
+    }
+    // Additional logic could be added here to handle inter-domain connections if needed
+  });
+
+  await applyCactusGroupLayout(graphComponent);
+}
