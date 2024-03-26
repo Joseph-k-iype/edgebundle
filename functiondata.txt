@@ -1,0 +1,56 @@
+async function buildGraphFromNewData(graphComponent, nodesData, edgesData, groupsData) {
+  const graph = graphComponent.graph;
+  graph.clear();
+
+  const nodeMap = new Map(); // Map to track created nodes by their IDs
+  const domainNodes = {}; // Map domain IDs to their corresponding group nodes
+
+  // First pass: Create domain and sourceSystem nodes, ensuring that sourceSystem takes precedence
+  nodesData.forEach(node => {
+    if (node.type === "domain") {
+      const domainColor = domainColors[node.id] || 'lightblue';
+      const domainNode = graph.createGroupNode(null, new Rect(0, 0, 300, 100), new ShapeNodeStyle({ fill: domainColor, shape: ShapeNodeShape.ROUND_RECTANGLE }), node.id);
+      domainNodes[node.id] = domainNode;
+    }
+  });
+
+  // Determine which nodes should be treated as sourceSystem based on their dual role
+  const sourceSystemNodes = nodesData.filter(node => node.type === 'sourceSystem' || (node.type === 'table' && groupsData.some(group => group.source === node.id && group.table === node.id)));
+  const tableNodes = nodesData.filter(node => node.type === 'table' && !sourceSystemNodes.includes(node));
+
+  // Create sourceSystem nodes
+  sourceSystemNodes.forEach(node => {
+    const style = new ShapeNodeStyle({ fill: '#80ed99', shape: ShapeNodeShape.RECTANGLE });
+    const newNode = graph.createNode(null, new Rect(0, 0, 100, 50), style, node.id);
+    graph.addLabel(newNode, node.id);
+    nodeMap.set(node.id, newNode);
+    // Ensure sourceSystem nodes are grouped under the correct domain
+    if (node.domain && domainNodes[node.domain]) {
+      graph.setParent(newNode, domainNodes[node.domain]);
+    }
+  });
+
+  // Second pass: Create table nodes, excluding those treated as sourceSystem
+  tableNodes.forEach(node => {
+    const style = new ShapeNodeStyle({ fill: '#f4a259', shape: ShapeNodeShape.RECTANGLE });
+    const newNode = graph.createNode(null, new Rect(0, 0, 100, 50), style, node.id);
+    graph.addLabel(newNode, node.id);
+    nodeMap.set(node.id, newNode);
+    // Group under the correct domain
+    if (node.domain && domainNodes[node.domain]) {
+      graph.setParent(newNode, domainNodes[node.domain]);
+    }
+  });
+
+  // Create edges
+  edgesData.forEach(edge => {
+    const sourceNode = nodeMap.get(edge.from);
+    const targetNode = nodeMap.get(edge.to);
+    if (sourceNode && targetNode) {
+      graph.createEdge(sourceNode, targetNode);
+    }
+  });
+
+  // Apply layout to organize the graph visually
+  await graphComponent.morphLayout(new HierarchicLayout(), '1s');
+}
